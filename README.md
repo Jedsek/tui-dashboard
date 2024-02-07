@@ -5,6 +5,9 @@ A dashboard widget for ratatui, WIP
 
 ![miku](examples/miku.png)
 
+## Note
+If you want to use icon, you should make sure that the terminal support [nerd fonts](https://www.nerdfonts.com/)
+
 ## Usage
 
 ```rust
