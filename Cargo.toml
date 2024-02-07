@@ -1,0 +1,20 @@
+[package]
+name = "tui-dashboard"
+description = "A dashboard widget for ratatui (WIP && Personal practice)"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["jedsek <jedsek@qq.com>"]
+readme = "README.md"
+keywords = ["ratatui", "tui", "terminal", "dashboard", "widget"]
+documentation = "https://github.com/jedsek/tui-dashboard"
+homepage = "https://github.com/jedsek/tui-dashboard"
+repository = "https://github.com/jedsek/tui-dashboard"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossterm = "0.27.0"
+ratatui = "0.26.0"
+ratatui-macros = "0.2.4"
+tui-big-text = "0.3.6"
