@@ -11,50 +11,50 @@ pub type AppResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Application.
 #[derive(Debug, Default, Clone)]
-pub struct Dashboard {
-    pub title: String,
-    pub subtitle: String,
-    pub avatar: String,
-    pub actions: Vec<Action>,
-    pub footer: Vec<String>,
+pub struct Dashboard<'a> {
+    general_title: String,
+    subtitle: String,
+    avatar: String,
+    avatar_block: Option<Block<'a>>,
+    table: Vec<TableItem>,
+    table_block: Option<Block<'a>>,
+    footer: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct Action {
-    pub description: String,
-    pub keyboard: String,
+pub struct TableItem {
+    left: String,
+    right: String,
 }
 
-impl Action {
+impl TableItem {
     pub fn new<I: Into<String>>(i: (I, I)) -> Self {
         Self {
-            description: i.0.into(),
-            keyboard: i.1.into(),
+            left: i.0.into(),
+            right: i.1.into(),
         }
     }
 }
 
-impl<T> From<(T, T)> for Action
+impl<T> From<(T, T)> for TableItem
 where
     T: Into<String>,
 {
     fn from(value: (T, T)) -> Self {
-        let description = value.0.into();
-        let keyboard = value.1.into();
-        Self { description, keyboard }
+        Self::new(value)
     }
 }
 
 #[derive(Default)]
-pub struct DashboardBuilder(Dashboard);
+pub struct DashboardBuilder<'a>(Dashboard<'a>);
 
-impl DashboardBuilder {
+impl<'a> DashboardBuilder<'a> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn title(mut self, title: impl Into<String>) -> Self {
-        self.0.title = title.into();
+    pub fn general_title(mut self, general_title: impl Into<String>) -> Self {
+        self.0.general_title = general_title.into();
         self
     }
 
@@ -68,32 +68,42 @@ impl DashboardBuilder {
         self
     }
 
-    pub fn actions(mut self, actions: Vec<impl Into<Action>>) -> Self {
-        self.0.actions = actions.into_iter().map(|i| i.into()).collect();
+    pub fn avatar_block(mut self, block: impl Into<Option<Block<'a>>>) -> Self {
+        self.0.avatar_block = block.into();
         self
     }
 
-    pub fn footer(mut self, footer: Vec<String>) -> Self {
-        self.0.footer = footer;
+    pub fn table(mut self, table: Vec<impl Into<TableItem>>) -> Self {
+        self.0.table = table.into_iter().map(|i| i.into()).collect();
         self
     }
 
-    pub fn build(self) -> Dashboard {
+    pub fn table_block(mut self, block: impl Into<Option<Block<'a>>>) -> Self {
+        self.0.table_block = block.into();
+        self
+    }
+
+    pub fn footer(mut self, footer: Vec<impl Into<String>>) -> Self {
+        self.0.footer = footer.into_iter().map(|i| i.into()).collect();
+        self
+    }
+
+    pub fn build(self) -> Dashboard<'a> {
         // let header_area = vertical![==20%, ==70%, ==5%].split()
         self.0
     }
 }
 
-impl Dashboard {
+impl Dashboard<'_> {
     fn render_header(&self, area: Rect, buf: &mut Buffer) {
         let [top_1, top_2] = vertical![==10%, ==5%]
-            .vertical_margin(2)
+            .vertical_margin(1)
             .split(area)
             .to_vec()
             .try_into()
             .unwrap();
 
-        let top_center_1 = horizontal![==(self.title.chars().count() as u16 * 4)]
+        let top_center_1 = horizontal![==(self.general_title.chars().count() as u16 * 4)]
             .flex(Flex::Center)
             .split(top_1)[0];
 
@@ -101,7 +111,7 @@ impl Dashboard {
             .flex(Flex::Center)
             .split(top_2)[0];
 
-        let title = Line::raw(&self.title).style(Style::new().light_red());
+        let title = Line::raw(&self.general_title).style(Style::new().light_red());
         let title = BigTextBuilder::default()
             .pixel_size(PixelSize::Quadrant)
             .lines(vec![title])
@@ -122,16 +132,16 @@ impl Dashboard {
             .unwrap();
 
         let lines = {
-            let to_line = |(idx, a): (usize, &'a Action)| {
+            let to_line = |(idx, a): (usize, &'a TableItem)| {
                 let style = match state.selected() {
                     Some(i) if i == idx => Style::default().italic().bold().underlined(),
                     _ => Style::default(),
                 };
-                let description = a.description.as_str().blue().style(style);
-                let keyboard = a.keyboard.as_str().to_uppercase().light_red().bold();
+                let description = a.left.as_str().blue().style(style);
+                let keyboard = a.right.as_str().to_uppercase().light_red().bold();
                 Line::default().spans(vec![description, keyboard]).style(style)
             };
-            self.actions.iter().enumerate().map(to_line)
+            self.table.iter().enumerate().map(to_line)
         };
 
         let mut table_width = 0;
@@ -144,7 +154,7 @@ impl Dashboard {
         let table = {
             let rows = lines.map(Row::new);
             let widths = constraints![==95%, ==5%];
-            let block = Block::bordered().title("Actions").title_alignment(Alignment::Center);
+            let block = self.table_block.clone().unwrap_or(Block::bordered());
             Table::new(rows, widths).highlight_symbol(" >> ").cyan().block(block)
         };
 
@@ -153,13 +163,25 @@ impl Dashboard {
     }
 
     fn render_avatar(&self, area: Rect, buf: &mut Buffer) {
-        let [_, left] = horizontal![==8%, ==27%].split(area).to_vec().try_into().unwrap();
-        let [_, left] = vertical![==20%, ==60%].split(left).to_vec().try_into().unwrap();
-        let avatar = {
-            let lines = self.avatar.lines().map(|i| Line::from(i.light_blue())).collect::<Vec<_>>();
-            let block = Block::bordered().title("Miku").title_alignment(Alignment::Center);
-            Paragraph::new(lines).block(block)
-        };
+        let lines = self.avatar.lines().map(|i| Line::from(i.light_blue())).collect::<Vec<_>>();
+        let mut avatar_width = 0;
+        let mut avatar_height = 0;
+        for line in lines.iter() {
+            avatar_width = avatar_width.max(line.width());
+            avatar_height += 1;
+        }
+        let [_, left] = horizontal![==8%, ==avatar_width as u16]
+            .split(area)
+            .to_vec()
+            .try_into()
+            .unwrap();
+        let [_, left] = vertical![==20%, ==avatar_height as u16]
+            .split(left)
+            .to_vec()
+            .try_into()
+            .unwrap();
+        let block = self.avatar_block.clone().unwrap_or(Block::bordered());
+        let avatar = Paragraph::new(lines).block(block);
         avatar.render(left, buf);
     }
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {
@@ -175,7 +197,7 @@ impl Dashboard {
     }
 }
 
-impl StatefulWidget for Dashboard {
+impl StatefulWidget for Dashboard<'_> {
     type State = TableState;
 
     fn render(mut self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
