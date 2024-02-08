@@ -1,7 +1,7 @@
 [package]
 name = "tui-dashboard"
-description = "A dashboard widget for ratatui (WIP && Personal practice)"
-version = "0.1.1"
+description = "A dashboard widget for ratatui (WIP)"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 authors = ["jedsek <jedsek@qq.com>"]
